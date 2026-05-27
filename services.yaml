@@ -1,0 +1,24 @@
+pulse_output:
+  name: Pulse output
+  description: Turn on a Controlart relay output for a short duration, then turn it off.
+  fields:
+    entity_id:
+      name: Entity
+      description: Controlart output switch to pulse.
+      required: true
+      selector:
+        entity:
+          domain: switch
+          integration: controlart_wired_relay
+    duration_ms:
+      name: Duration
+      description: Pulse duration in milliseconds.
+      required: false
+      default: 500
+      selector:
+        number:
+          min: 100
+          max: 10000
+          step: 100
+          unit_of_measurement: ms
+          mode: box

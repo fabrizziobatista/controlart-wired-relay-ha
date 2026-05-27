@@ -1,0 +1,87 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Controlart Wired Relay",
+        "description": "Configure the Controlart MD-ETH-MCRL2 TCP relay module. MAC3, MAC4 and MAC5 are optional; leave them empty to discover them automatically.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "mac3": "MAC3",
+          "mac4": "MAC4",
+          "mac5": "MAC5",
+          "name": "Name"
+        }
+      }
+    },
+    "error": {
+      "required": "This field is required.",
+      "missing_mac": "MAC3, MAC4 and MAC5 are required.",
+      "invalid_mac_part": "Enter a decimal value from 0 to 255 or hexadecimal value like 4B, $4B, or 0x4B.",
+      "cannot_discover_mac": "Could not discover MAC3, MAC4 and MAC5 automatically. Check host and port, or enter the MAC fields manually.",
+      "invalid_interlock_pairs": "Enter one pair per line using OUT numbers from 0 to 9, for example 0-1."
+    },
+    "abort": {
+      "already_configured": "This relay module is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Controlart Wired Relay Options",
+        "data": {
+          "scan_interval": "Polling interval in seconds",
+          "interlock_pairs": "Interlock pairs",
+          "interlock_delay_ms": "Interlock delay in milliseconds"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "output": {
+        "name": "OUT{channel}"
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "input_pressed": "{subtype} pressed",
+      "keypad_event": "{subtype}"
+    },
+    "trigger_subtype": {
+      "in0": "IN0",
+      "in1": "IN1",
+      "in2": "IN2",
+      "in3": "IN3",
+      "in4": "IN4",
+      "in5": "IN5",
+      "in6": "IN6",
+      "in7": "IN7",
+      "in8": "IN8",
+      "in9": "IN9",
+      "in10": "IN10",
+      "in11": "IN11",
+      "keypad_01-0E-11_key_0_click": "Keypad 01-0E-11 key 0 click",
+      "keypad_01-0E-11_key_0_double_click": "Keypad 01-0E-11 key 0 double click",
+      "keypad_01-0E-11_key_0_long_click": "Keypad 01-0E-11 key 0 long click",
+      "keypad_01-0E-11_key_0_press": "Keypad 01-0E-11 key 0 press",
+      "keypad_01-0E-11_key_0_release": "Keypad 01-0E-11 key 0 release",
+      "keypad_01-0E-11_key_1_click": "Keypad 01-0E-11 key 1 click",
+      "keypad_01-0E-11_key_1_double_click": "Keypad 01-0E-11 key 1 double click",
+      "keypad_01-0E-11_key_1_long_click": "Keypad 01-0E-11 key 1 long click",
+      "keypad_01-0E-11_key_1_press": "Keypad 01-0E-11 key 1 press",
+      "keypad_01-0E-11_key_1_release": "Keypad 01-0E-11 key 1 release",
+      "keypad_01-0E-11_key_2_click": "Keypad 01-0E-11 key 2 click",
+      "keypad_01-0E-11_key_2_double_click": "Keypad 01-0E-11 key 2 double click",
+      "keypad_01-0E-11_key_2_long_click": "Keypad 01-0E-11 key 2 long click",
+      "keypad_01-0E-11_key_2_press": "Keypad 01-0E-11 key 2 press",
+      "keypad_01-0E-11_key_2_release": "Keypad 01-0E-11 key 2 release",
+      "keypad_01-0E-11_key_3_click": "Keypad 01-0E-11 key 3 click",
+      "keypad_01-0E-11_key_3_double_click": "Keypad 01-0E-11 key 3 double click",
+      "keypad_01-0E-11_key_3_long_click": "Keypad 01-0E-11 key 3 long click",
+      "keypad_01-0E-11_key_3_press": "Keypad 01-0E-11 key 3 press",
+      "keypad_01-0E-11_key_3_release": "Keypad 01-0E-11 key 3 release"
+    }
+  }
+}
