@@ -1,0 +1,7 @@
+{
+  "name": "Controlart Wired Relay",
+  "content_in_root": true,
+  "render_readme": true,
+  "domains": ["switch", "binary_sensor", "sensor"],
+  "country": ["BR"]
+}
