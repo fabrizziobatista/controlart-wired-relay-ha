@@ -2,6 +2,8 @@
 
 from unittest.mock import AsyncMock, patch
 
+import voluptuous as vol
+
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -48,6 +50,39 @@ async def test_options_form_uses_data_fallback(hass) -> None:
     assert schema[CONF_HOST] == "192.0.2.10"
     assert schema[CONF_PORT] == 4998
     assert schema[CONF_SCAN_INTERVAL] == DEFAULT_SCAN_INTERVAL
+
+    interlock_marker = next(
+        marker
+        for marker in result["data_schema"].schema
+        if marker.schema == CONF_INTERLOCK_PAIRS
+    )
+    assert isinstance(interlock_marker, vol.Optional)
+
+
+async def test_options_accepts_empty_interlock_pairs(hass) -> None:
+    """The options flow saves successfully with no interlock pairs."""
+    entry = _entry()
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.controlart_wired_relay.config_flow."
+        "ControlartRelayClient.async_get_state",
+        AsyncMock(return_value={"inputs": [False] * 12, "outputs": [False] * 10}),
+    ):
+        flow = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            flow["flow_id"],
+            {
+                CONF_HOST: "192.0.2.10",
+                CONF_PORT: 4998,
+                CONF_SCAN_INTERVAL: 5,
+                CONF_INTERLOCK_PAIRS: "",
+                CONF_INTERLOCK_DELAY_MS: DEFAULT_INTERLOCK_DELAY_MS,
+            },
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_INTERLOCK_PAIRS] == ""
 
 
 async def test_options_save_host_port_and_reload(hass) -> None:

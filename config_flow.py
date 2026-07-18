@@ -390,7 +390,7 @@ class ControlartWiredRelayOptionsFlow(config_entries.OptionsFlow):
                 ): vol.All(
                     int, vol.Range(min=1, max=3600)
                 ),
-                vol.Required(
+                vol.Optional(
                     CONF_INTERLOCK_PAIRS, default=current_pairs
                 ): str,
                 vol.Required(

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Corrigido `interlock_pairs` no Options Flow para ser opcional e aceitar valor vazio.
+- Corrigidos os catálogos completos de tradução do Options Flow em inglês e português do Brasil.
+- Adicionados testes para o schema opcional e para salvar sem pares de intertravamento.
+
 ## 0.2.2
 
 - Inserida possibilidade de configuracao do modulo apos instalado
@@ -25,4 +31,3 @@
 - Added 10 output switches for `OUT0..OUT9`.
 - Added 12 input binary sensors for `IN0..IN11`.
 - Added polling via DataUpdateCoordinator.
-

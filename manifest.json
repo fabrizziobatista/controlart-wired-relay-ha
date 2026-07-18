@@ -1,7 +1,7 @@
 {
   "domain": "controlart_wired_relay",
   "name": "Controlart Wired Relay",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "documentation": "https://github.com/fabrizziobatista/controlart-wired-relay-ha",
   "codeowners": [],
   "requirements": [],
