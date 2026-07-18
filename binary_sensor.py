@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -62,9 +62,14 @@ class ControlartRelayInputBinarySensor(
             manufacturer=MANUFACTURER,
             model=MODEL,
             name=self._entry.data[CONF_NAME],
-            configuration_url=f"http://{self._entry.data[CONF_HOST]}",
+            configuration_url=f"http://{self._current_host}",
             sw_version=f"Integration {INTEGRATION_VERSION}",
         )
+
+    @property
+    def _current_host(self) -> str:
+        """Return the options host with legacy data fallback."""
+        return self._entry.options.get(CONF_HOST, self._entry.data[CONF_HOST])
 
     @property
     def icon(self) -> str:

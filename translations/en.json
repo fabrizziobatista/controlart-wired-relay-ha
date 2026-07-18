@@ -1,0 +1,51 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Controlart Wired Relay Options",
+        "description": "Change the module communication address and behavior. The new address is tested before it is saved, then the integration reloads automatically.",
+        "data": {
+          "host": "Host",
+          "port": "TCP port",
+          "scan_interval": "Polling interval in seconds",
+          "interlock_pairs": "Interlock pairs",
+          "interlock_delay_ms": "Interlock delay in milliseconds"
+        }
+      }
+    },
+    "error": {
+      "required": "This field is required.",
+      "invalid_interlock_pairs": "Enter one pair per line using OUT numbers from 0 to 9, for example 0-1.",
+      "invalid_host": "The host name could not be resolved.",
+      "cannot_connect": "The module could not be reached. Check the host, port, and network.",
+      "timeout": "The module did not respond before the connection timed out.",
+      "connection_refused": "The module refused the TCP connection. Check the port.",
+      "invalid_response": "The endpoint responded, but the response is not valid for this Controlart module.",
+      "unknown": "An unexpected error occurred while validating the connection."
+    }
+  },
+  "config": {
+    "error": {
+      "required": "This field is required.",
+      "invalid_interlock_pairs": "Enter one pair per line using OUT numbers from 0 to 9, for example 0-1.",
+      "invalid_host": "The host name could not be resolved.",
+      "cannot_connect": "The module could not be reached. Check the host, port, and network.",
+      "timeout": "The module did not respond before the connection timed out.",
+      "connection_refused": "The module refused the TCP connection. Check the port.",
+      "invalid_response": "The endpoint responded, but the response is not valid for this Controlart module.",
+      "unknown": "An unexpected error occurred while validating the connection."
+    }
+  },
+  "services": {
+    "reload_connection": {
+      "name": "Reload connection",
+      "description": "Close and reopen the TCP connection for one Controlart module.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "Controlart module whose connection should be reloaded."
+        }
+      }
+    }
+  }
+}

@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 import re
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITY_ID, CONF_HOST, CONF_NAME, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    CONF_DEVICE_ID,
+    CONF_ENTITY_ID,
+    CONF_HOST,
+    CONF_NAME,
+    CONF_PORT,
+)
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 
@@ -23,6 +31,7 @@ from .const import (
     CONF_MAC5,
     CONF_SCAN_INTERVAL,
     DEFAULT_INTERLOCK_DELAY_MS,
+    DEFAULT_PORT,
     DEFAULT_PULSE_DURATION_MS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -31,6 +40,7 @@ from .const import (
     parse_interlock_pairs,
     PLATFORMS,
     SERVICE_PULSE_OUTPUT,
+    SERVICE_RELOAD_CONNECTION,
 )
 from .coordinator import ControlartRelayClient, ControlartRelayCoordinator
 
@@ -47,6 +57,9 @@ PULSE_OUTPUT_SCHEMA = vol.Schema(
 )
 
 OUT_UNIQUE_ID_RE = re.compile(r"_out(?P<channel>\d+)$")
+_LOGGER = logging.getLogger(__name__)
+
+RELOAD_CONNECTION_SCHEMA = vol.Schema({vol.Required(CONF_DEVICE_ID): cv.string})
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -100,6 +113,49 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             schema=PULSE_OUTPUT_SCHEMA,
         )
 
+    async def async_handle_reload_connection(call: ServiceCall) -> None:
+        """Reload the config entry associated with a selected device."""
+        device_id = call.data[CONF_DEVICE_ID]
+        device = dr.async_get(hass).async_get(device_id)
+        if device is None:
+            raise HomeAssistantError(f"Controlart device {device_id} was not found")
+
+        device_entry_ids = set(device.config_entries)
+        matching_entries = [
+            entry
+            for entry in hass.config_entries.async_entries(DOMAIN)
+            if entry.entry_id in device_entry_ids
+        ]
+        if len(matching_entries) != 1:
+            raise HomeAssistantError(
+                "The selected device is not associated with exactly one "
+                "Controlart configuration entry"
+            )
+
+        entry = matching_entries[0]
+        _LOGGER.info(
+            "Service reload_connection requested for Controlart entry %s",
+            entry.entry_id,
+        )
+        if not await hass.config_entries.async_reload(entry.entry_id):
+            _LOGGER.error(
+                "Failed to reload Controlart connection for entry %s",
+                entry.entry_id,
+            )
+            raise HomeAssistantError("Failed to reload the Controlart connection")
+        _LOGGER.info(
+            "Controlart connection reloaded successfully for entry %s",
+            entry.entry_id,
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_RELOAD_CONNECTION):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_RELOAD_CONNECTION,
+            async_handle_reload_connection,
+            schema=RELOAD_CONNECTION_SCHEMA,
+        )
+
     return True
 
 
@@ -107,10 +163,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Controlart Wired Relay from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    scan_interval = int(entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+    host = str(entry.options.get(CONF_HOST, entry.data[CONF_HOST]))
+    port = int(entry.options.get(CONF_PORT, entry.data.get(CONF_PORT, DEFAULT_PORT)))
+    scan_interval = int(
+        entry.options.get(
+            CONF_SCAN_INTERVAL,
+            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+        )
+    )
+    _LOGGER.info("Connecting Controlart entry %s to %s:%s", entry.entry_id, host, port)
     client = ControlartRelayClient(
-        host=entry.data[CONF_HOST],
-        port=int(entry.data[CONF_PORT]),
+        host=host,
+        port=port,
         mac3=entry.data[CONF_MAC3],
         mac4=entry.data[CONF_MAC4],
         mac5=entry.data[CONF_MAC5],
@@ -121,12 +185,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name=entry.data[CONF_NAME],
         update_interval=timedelta(seconds=scan_interval),
         interlock_pairs=parse_interlock_pairs(
-            entry.options.get(CONF_INTERLOCK_PAIRS, "")
+            entry.options.get(
+                CONF_INTERLOCK_PAIRS,
+                entry.data.get(CONF_INTERLOCK_PAIRS, ""),
+            )
         ),
         interlock_delay_ms=int(
             entry.options.get(
                 CONF_INTERLOCK_DELAY_MS,
-                DEFAULT_INTERLOCK_DELAY_MS,
+                entry.data.get(
+                    CONF_INTERLOCK_DELAY_MS,
+                    DEFAULT_INTERLOCK_DELAY_MS,
+                ),
             )
         ),
     )
@@ -137,6 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.async_start_listener(entry)
+    _LOGGER.info("Controlart entry %s connected to %s:%s", entry.entry_id, host, port)
     return True
 
 
@@ -156,4 +227,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the entry when options change."""
+    _LOGGER.info("Reloading Controlart entry %s after options update", entry.entry_id)
     await hass.config_entries.async_reload(entry.entry_id)

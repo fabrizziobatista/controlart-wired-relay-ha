@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Inserida possibilidade de configuracao do modulo apos instalado
+
 ## 0.2.1
 
 - Fixed clearing `interlock_pairs` in the options flow. Empty input now disables configured interlocks.

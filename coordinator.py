@@ -58,6 +58,7 @@ class ControlartRelayClient:
         self.mac5 = mac5
         self.timeout = timeout
         self._lock = asyncio.Lock()
+        self._writers: set[asyncio.StreamWriter] = set()
 
     @property
     def mac_suffix(self) -> str:
@@ -118,6 +119,7 @@ class ControlartRelayClient:
                     asyncio.open_connection(self.host, self.port),
                     timeout=self.timeout,
                 )
+                self._writers.add(writer)
             except (OSError, TimeoutError, asyncio.TimeoutError) as err:
                 raise ControlartRelayError(
                     f"Unable to connect to {self.host}:{self.port}"
@@ -141,10 +143,21 @@ class ControlartRelayClient:
                     await writer.wait_closed()
                 except OSError:
                     pass
+                self._writers.discard(writer)
 
         response = "\n".join(lines)
         _LOGGER.debug("Controlart response: %s", response)
         return response
+
+    async def async_close(self) -> None:
+        """Close every active command connection."""
+        writers = tuple(self._writers)
+        for writer in writers:
+            writer.close()
+        for writer in writers:
+            with suppress(OSError):
+                await writer.wait_closed()
+            self._writers.discard(writer)
 
     async def _async_read_until_setcmd(
         self, reader: asyncio.StreamReader
@@ -235,6 +248,7 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
         self.config_entry_id: str | None = None
         self._listener_task: asyncio.Task[None] | None = None
         self._listener_writer: asyncio.StreamWriter | None = None
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._pulse_locks: dict[int, asyncio.Lock] = {}
         self._interlock_pairs = interlock_pairs or []
         self._interlock_delay_ms = interlock_delay_ms
@@ -288,7 +302,13 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
             )
 
     async def async_stop_listener(self) -> None:
-        """Stop the persistent TCP listener."""
+        """Stop the listener, commands, and coordinator-owned tasks."""
+        _LOGGER.info(
+            "Closing Controlart connection to %s:%s for %s",
+            self.client.host,
+            self.client.port,
+            self.client.mac_suffix,
+        )
         writer = self._listener_writer
         if writer:
             writer.close()
@@ -301,7 +321,14 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
             with suppress(asyncio.CancelledError):
                 await self._listener_task
             self._listener_task = None
-        _LOGGER.debug("Controlart listener stopped for %s", self.client.mac_suffix)
+        tasks = tuple(self._background_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._background_tasks.clear()
+        await self.client.async_close()
+        _LOGGER.info("Controlart connection closed for %s", self.client.mac_suffix)
 
     async def _async_listen_forever(self) -> None:
         """Keep a TCP listener connected and process async setcmd events."""
@@ -386,7 +413,7 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
             except (OSError, TimeoutError, asyncio.TimeoutError) as err:
                 self._set_connection_status("disconnected")
                 self._set_last_error(str(err))
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "Controlart listener connection error for %s: %s",
                     self.client.mac_suffix,
                     err,
@@ -540,10 +567,12 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
 
             self._interlock_fallback_active.add(pair)
             _LOGGER.warning("Controlart %s", message)
-            self._hass.async_create_task(
+            task = self._hass.async_create_task(
                 self._async_disable_interlock_pair(first, second),
                 f"{DOMAIN}_{self.client.mac_suffix}_interlock_{first}_{second}",
             )
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
     async def _async_disable_interlock_pair(self, first: int, second: int) -> None:
         """Safely turn off both outputs in a conflicted pair."""

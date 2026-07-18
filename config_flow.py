@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import socket
 from typing import Any
 
 import voluptuous as vol
@@ -28,6 +30,9 @@ from .const import (
     MIN_INTERLOCK_DELAY_MS,
     parse_interlock_pairs,
 )
+from .coordinator import ControlartRelayClient, ControlartRelayError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _clean_mac_part(value: Any) -> str:
@@ -137,11 +142,15 @@ def _data_schema(user_input: dict[str, Any] | None = None) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_HOST, default=user_input.get(CONF_HOST, "")): str,
-            vol.Required(CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)): int,
+            vol.Required(
+                CONF_PORT, default=user_input.get(CONF_PORT, DEFAULT_PORT)
+            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
             vol.Optional(CONF_MAC3, default=user_input.get(CONF_MAC3, "")): str,
             vol.Optional(CONF_MAC4, default=user_input.get(CONF_MAC4, "")): str,
             vol.Optional(CONF_MAC5, default=user_input.get(CONF_MAC5, "")): str,
-            vol.Optional(CONF_NAME, default=user_input.get(CONF_NAME, DEFAULT_NAME)): str,
+            vol.Optional(
+                CONF_NAME, default=user_input.get(CONF_NAME, DEFAULT_NAME)
+            ): str,
         }
     )
 
@@ -195,7 +204,11 @@ class ControlartWiredRelayConfigFlow(
                 except ValueError:
                     errors["base"] = "cannot_discover_mac"
 
-            if not errors:
+            current = self._current_options()
+            endpoint_changed = (
+                host != current[CONF_HOST] or port != current[CONF_PORT]
+            )
+            if not errors and endpoint_changed:
                 suffix = _mac_suffix(mac3, mac4, mac5)
                 await self.async_set_unique_id(f"{DOMAIN}_{suffix}")
                 self._abort_if_unique_id_configured()
@@ -242,45 +255,136 @@ class ControlartWiredRelayOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
+            host = str(user_input[CONF_HOST]).strip()
+            port = int(user_input[CONF_PORT])
+            if not host:
+                errors[CONF_HOST] = "required"
+
             try:
                 parse_interlock_pairs(
                     user_input.get(CONF_INTERLOCK_PAIRS, "")
                 )
             except (TypeError, ValueError):
-                return self.async_show_form(
-                    step_id="init",
-                    data_schema=self._options_schema(user_input),
-                    errors={CONF_INTERLOCK_PAIRS: "invalid_interlock_pairs"},
-                )
+                errors[CONF_INTERLOCK_PAIRS] = "invalid_interlock_pairs"
 
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
-                    CONF_INTERLOCK_PAIRS: str(
-                        user_input.get(CONF_INTERLOCK_PAIRS, "")
-                    ).strip(),
-                    CONF_INTERLOCK_DELAY_MS: int(
-                        user_input[CONF_INTERLOCK_DELAY_MS]
-                    ),
-                },
-            )
+            if not errors:
+                _LOGGER.info(
+                    "Validating Controlart connection change to %s:%s",
+                    host,
+                    port,
+                )
+                error = await self._async_validate_connection(host, port)
+                if error:
+                    errors["base"] = error
+                    _LOGGER.info(
+                        "Controlart connection validation failed for %s:%s: %s",
+                        host,
+                        port,
+                        error,
+                    )
+
+            if not errors:
+                _LOGGER.info(
+                    "Saving Controlart communication address %s:%s",
+                    host,
+                    port,
+                )
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                        CONF_INTERLOCK_PAIRS: str(
+                            user_input.get(CONF_INTERLOCK_PAIRS, "")
+                        ).strip(),
+                        CONF_INTERLOCK_DELAY_MS: int(
+                            user_input[CONF_INTERLOCK_DELAY_MS]
+                        ),
+                    },
+                )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=self._options_schema(self._config_entry.options),
+            data_schema=self._options_schema(
+                user_input if user_input is not None else self._current_options()
+            ),
+            errors=errors,
         )
+
+    def _current_options(self) -> dict[str, Any]:
+        """Return options with config data fallback for older entries."""
+        return {
+            CONF_HOST: self._config_entry.options.get(
+                CONF_HOST, self._config_entry.data[CONF_HOST]
+            ),
+            CONF_PORT: self._config_entry.options.get(
+                CONF_PORT, self._config_entry.data.get(CONF_PORT, DEFAULT_PORT)
+            ),
+            CONF_SCAN_INTERVAL: self._config_entry.options.get(
+                CONF_SCAN_INTERVAL,
+                self._config_entry.data.get(
+                    CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                ),
+            ),
+            CONF_INTERLOCK_PAIRS: self._config_entry.options.get(
+                CONF_INTERLOCK_PAIRS,
+                self._config_entry.data.get(CONF_INTERLOCK_PAIRS, ""),
+            ),
+            CONF_INTERLOCK_DELAY_MS: self._config_entry.options.get(
+                CONF_INTERLOCK_DELAY_MS,
+                self._config_entry.data.get(
+                    CONF_INTERLOCK_DELAY_MS, DEFAULT_INTERLOCK_DELAY_MS
+                ),
+            ),
+        }
+
+    async def _async_validate_connection(self, host: str, port: int) -> str | None:
+        """Validate the proposed endpoint using a real protocol request."""
+        client = ControlartRelayClient(
+            host=host,
+            port=port,
+            mac3=self._config_entry.data[CONF_MAC3],
+            mac4=self._config_entry.data[CONF_MAC4],
+            mac5=self._config_entry.data[CONF_MAC5],
+        )
+        try:
+            await client.async_get_state()
+        except ControlartRelayError as err:
+            cause = err.__cause__
+            if isinstance(cause, socket.gaierror):
+                return "invalid_host"
+            if isinstance(cause, ConnectionRefusedError):
+                return "connection_refused"
+            if isinstance(cause, (TimeoutError, asyncio.TimeoutError)):
+                return "timeout"
+            if isinstance(cause, OSError):
+                return "cannot_connect"
+            return "invalid_response"
+        except Exception:  # noqa: BLE001 - displayed as a translated flow error
+            _LOGGER.exception("Unexpected error validating Controlart connection")
+            return "unknown"
+        finally:
+            await client.async_close()
+        return None
 
     def _options_schema(self, values: dict[str, Any]) -> vol.Schema:
         """Return options schema."""
         current_scan_interval = values.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        current_host = values.get(CONF_HOST, "")
+        current_port = values.get(CONF_PORT, DEFAULT_PORT)
         current_pairs = values.get(CONF_INTERLOCK_PAIRS, "")
         current_delay = values.get(
             CONF_INTERLOCK_DELAY_MS, DEFAULT_INTERLOCK_DELAY_MS
         )
         schema = vol.Schema(
             {
+                vol.Required(CONF_HOST, default=current_host): str,
+                vol.Required(CONF_PORT, default=current_port): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=65535)
+                ),
                 vol.Required(
                     CONF_SCAN_INTERVAL, default=current_scan_interval
                 ): vol.All(

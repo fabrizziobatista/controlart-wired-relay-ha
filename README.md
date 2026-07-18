@@ -28,7 +28,10 @@ This repository is prepared for HACS as a custom repository.
 
 1. Open **HACS > Integrations**.
 2. Open the menu and choose **Custom repositories**.
-3. Add this repository URL.
+3. Add this repository URL:
+
+https://github.com/fabrizziobatista/controlart-wired-relay-ha
+
 4. Select category **Integration**.
 5. Search for **Controlart Wired Relay** and install it.
 6. Restart Home Assistant.
@@ -97,6 +100,12 @@ macaddr_RT,6D-08-CA
 
 The integration stores MAC fields as two-digit uppercase hexadecimal values, but sends relay commands using decimal MAC values as required by the module.
 
+### Changing the IP address or TCP port
+
+After installation, open **Settings > Devices & services > Controlart Wired Relay > Configure**. Change the host or TCP port and submit the form. The integration tests a real protocol request before saving; an unreachable address or invalid module response leaves the active configuration unchanged.
+
+After a successful test, Home Assistant reloads only that configuration entry. The old listener and TCP sockets are closed before reconnecting to the new address. Entity unique IDs and device identifiers do not change, so entity IDs, areas, dashboards, history, and automations are preserved.
+
 ## Entities
 
 ### Switches
@@ -148,6 +157,20 @@ data:
 ```
 
 The integration rejects concurrent pulses on the same output channel.
+
+## Service: reload_connection
+
+Use `controlart_wired_relay.reload_connection` to close and reopen one module connection without restarting Home Assistant. In **Developer tools > Actions**, select **Controlart Wired Relay: Reload connection**, then select the Controlart device. This is useful after a temporary network failure, module restart, or network maintenance.
+
+Example using a device ID:
+
+```yaml
+action: controlart_wired_relay.reload_connection
+data:
+  device_id: 0123456789abcdef0123456789abcdef
+```
+
+Only the configuration entry associated with the selected device is reloaded. Other configured Controlart modules continue running.
 
 ## Interlock
 

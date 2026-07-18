@@ -39,6 +39,7 @@ DEFAULT_UPDATE_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
 MANUFACTURER = "Controlart"
 MODEL = "MD-ETH-MCRL2"
 SERVICE_PULSE_OUTPUT = "pulse_output"
+SERVICE_RELOAD_CONNECTION = "reload_connection"
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH]
 

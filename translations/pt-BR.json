@@ -1,0 +1,51 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do Controlart Wired Relay",
+        "description": "Altere o endereço de comunicação e o comportamento do módulo. O novo endereço é testado antes de ser salvo e a integração é recarregada automaticamente.",
+        "data": {
+          "host": "Endereço IP ou nome do host",
+          "port": "Porta TCP",
+          "scan_interval": "Intervalo de polling em segundos",
+          "interlock_pairs": "Pares de intertravamento",
+          "interlock_delay_ms": "Atraso do intertravamento em milissegundos"
+        }
+      }
+    },
+    "error": {
+      "required": "Este campo é obrigatório.",
+      "invalid_interlock_pairs": "Informe um par por linha usando saídas de 0 a 9, por exemplo 0-1.",
+      "invalid_host": "Não foi possível resolver o nome do host.",
+      "cannot_connect": "Não foi possível alcançar o módulo. Verifique o host, a porta e a rede.",
+      "timeout": "O módulo não respondeu antes do tempo limite da conexão.",
+      "connection_refused": "O módulo recusou a conexão TCP. Verifique a porta.",
+      "invalid_response": "O endereço respondeu, mas a resposta não é válida para este módulo Controlart.",
+      "unknown": "Ocorreu um erro inesperado ao validar a conexão."
+    }
+  },
+  "config": {
+    "error": {
+      "required": "Este campo é obrigatório.",
+      "invalid_interlock_pairs": "Informe um par por linha usando saídas de 0 a 9, por exemplo 0-1.",
+      "invalid_host": "Não foi possível resolver o nome do host.",
+      "cannot_connect": "Não foi possível alcançar o módulo. Verifique o host, a porta e a rede.",
+      "timeout": "O módulo não respondeu antes do tempo limite da conexão.",
+      "connection_refused": "O módulo recusou a conexão TCP. Verifique a porta.",
+      "invalid_response": "O endereço respondeu, mas a resposta não é válida para este módulo Controlart.",
+      "unknown": "Ocorreu um erro inesperado ao validar a conexão."
+    }
+  },
+  "services": {
+    "reload_connection": {
+      "name": "Recarregar conexão",
+      "description": "Fecha e reabre a conexão TCP de um módulo Controlart.",
+      "fields": {
+        "device_id": {
+          "name": "Dispositivo",
+          "description": "Módulo Controlart cuja conexão deve ser recarregada."
+        }
+      }
+    }
+  }
+}

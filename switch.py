@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -33,7 +33,9 @@ async def async_setup_entry(
     )
 
 
-class ControlartRelaySwitch(CoordinatorEntity[ControlartRelayCoordinator], SwitchEntity):
+class ControlartRelaySwitch(
+    CoordinatorEntity[ControlartRelayCoordinator], SwitchEntity
+):
     """Representation of one Controlart relay output."""
 
     _attr_icon = "mdi:electric-switch"
@@ -62,7 +64,7 @@ class ControlartRelaySwitch(CoordinatorEntity[ControlartRelayCoordinator], Switc
             manufacturer=MANUFACTURER,
             model=MODEL,
             name=self._entry.data[CONF_NAME],
-            configuration_url=f"http://{self._entry.data[CONF_HOST]}",
+            configuration_url=f"http://{self._current_host}",
             sw_version=f"Integration {INTEGRATION_VERSION}",
         )
 
@@ -72,6 +74,11 @@ class ControlartRelaySwitch(CoordinatorEntity[ControlartRelayCoordinator], Switc
         if self.coordinator.data is None:
             return None
         return self.coordinator.data["outputs"][self._channel]
+
+    @property
+    def _current_host(self) -> str:
+        """Return the options host with legacy data fallback."""
+        return self._entry.options.get(CONF_HOST, self._entry.data[CONF_HOST])
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the output on."""
