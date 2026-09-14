@@ -31,7 +31,7 @@ MAX_INTERLOCK_DELAY_MS = 5000
 MIN_PULSE_DURATION_MS = 100
 MIN_INTERLOCK_DELAY_MS = 100
 INPUT_COUNT = 12
-INTEGRATION_VERSION = "0.2.3"
+INTEGRATION_VERSION = "0.2.4"
 OUTLET_COUNT = 10
 
 DEFAULT_UPDATE_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
@@ -48,6 +48,7 @@ def parse_interlock_pairs(value: Any) -> list[tuple[int, int]]:
     """Parse interlock pair lines like 0-1."""
     pairs: list[tuple[int, int]] = []
     seen: set[tuple[int, int]] = set()
+    channels_in_pairs: set[int] = set()
 
     for raw_line in str(value or "").splitlines():
         line = raw_line.strip()
@@ -72,7 +73,10 @@ def parse_interlock_pairs(value: Any) -> list[tuple[int, int]]:
         pair = tuple(sorted((first, second)))
         if pair in seen:
             continue
+        if first in channels_in_pairs or second in channels_in_pairs:
+            raise ValueError("interlock pairs must not overlap")
         seen.add(pair)
+        channels_in_pairs.update(pair)
         pairs.append(pair)
 
     return pairs

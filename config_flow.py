@@ -204,11 +204,7 @@ class ControlartWiredRelayConfigFlow(
                 except ValueError:
                     errors["base"] = "cannot_discover_mac"
 
-            current = self._current_options()
-            endpoint_changed = (
-                host != current[CONF_HOST] or port != current[CONF_PORT]
-            )
-            if not errors and endpoint_changed:
+            if not errors:
                 suffix = _mac_suffix(mac3, mac4, mac5)
                 await self.async_set_unique_id(f"{DOMAIN}_{suffix}")
                 self._abort_if_unique_id_configured()

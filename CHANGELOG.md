@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.4
+
+- Enforced non-overlapping interlock pairs and made operations within each pair atomic.
+- Confirmed the peer output is off before enabling an interlocked output, including rechecks during the configured delay.
+- Prevented new output operations while the coordinator is stopping and synchronized the interlock safety fallback with normal commands.
+- Corrected initial config-flow unique-ID handling and added TCP port validation coverage.
+- Added concurrency, shutdown, and safety tests for logical interlocks.
+
 ## 0.2.3
 
 - Corrigido `interlock_pairs` no Options Flow para ser opcional e aceitar valor vazio.

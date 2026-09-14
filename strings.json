@@ -19,7 +19,7 @@
       "missing_mac": "MAC3, MAC4 and MAC5 are required.",
       "invalid_mac_part": "Enter a decimal value from 0 to 255 or hexadecimal value like 4B, $4B, or 0x4B.",
       "cannot_discover_mac": "Could not discover MAC3, MAC4 and MAC5 automatically. Check host and port, or enter the MAC fields manually.",
-      "invalid_interlock_pairs": "Enter one pair per line using OUT numbers from 0 to 9, for example 0-1."
+      "invalid_interlock_pairs": "Enter one non-overlapping pair per line using OUT numbers from 0 to 9, for example 0-1."
       ,"invalid_host": "The host name could not be resolved."
       ,"cannot_connect": "The module could not be reached. Check the host, port, and network."
       ,"timeout": "The module did not respond before the connection timed out."
@@ -47,7 +47,7 @@
     },
     "error": {
       "required": "This field is required.",
-      "invalid_interlock_pairs": "Enter one pair per line using OUT numbers from 0 to 9, for example 0-1.",
+      "invalid_interlock_pairs": "Enter one non-overlapping pair per line using OUT numbers from 0 to 9, for example 0-1.",
       "invalid_host": "The host name could not be resolved.",
       "cannot_connect": "The module could not be reached. Check the host, port, and network.",
       "timeout": "The module did not respond before the connection timed out.",

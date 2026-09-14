@@ -2,9 +2,11 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 import voluptuous as vol
 
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
+from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -20,6 +22,7 @@ from custom_components.controlart_wired_relay.const import (
     DOMAIN,
 )
 from custom_components.controlart_wired_relay.coordinator import ControlartRelayError
+from custom_components.controlart_wired_relay.config_flow import _data_schema
 
 
 def _entry(options: dict | None = None) -> MockConfigEntry:
@@ -36,6 +39,54 @@ def _entry(options: dict | None = None) -> MockConfigEntry:
         options=options or {},
         unique_id="controlart_wired_relay_6D_08_CA",
     )
+
+
+async def test_user_flow_creates_new_entry_with_discovered_mac_defaults(hass) -> None:
+    """A new entry saves data and initial options without reading old options."""
+    flow = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
+    assert flow["type"] is FlowResultType.FORM
+
+    with patch(
+        "custom_components.controlart_wired_relay.config_flow._async_discover_mac",
+        AsyncMock(return_value=("6D", "08", "CA")),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            flow["flow_id"],
+            {
+                CONF_HOST: "relay.example.local",
+                CONF_PORT: 5000,
+                CONF_MAC3: "",
+                CONF_MAC4: "",
+                CONF_MAC5: "",
+                CONF_NAME: "Garden Relay",
+            },
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Garden Relay"
+    assert result["data"] == {
+        CONF_HOST: "relay.example.local",
+        CONF_PORT: 5000,
+        CONF_MAC3: "6D",
+        CONF_MAC4: "08",
+        CONF_MAC5: "CA",
+        CONF_NAME: "Garden Relay",
+    }
+    assert result["options"] == {CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL}
+
+
+def test_config_flow_port_schema_accepts_only_valid_tcp_range() -> None:
+    """The initial flow keeps the inclusive TCP port range."""
+    schema = _data_schema()
+
+    assert schema({CONF_HOST: "relay.local", CONF_PORT: 1})[CONF_PORT] == 1
+    assert schema({CONF_HOST: "relay.local", CONF_PORT: 65535})[CONF_PORT] == 65535
+    for invalid_port in (0, 65536, "not-a-port"):
+        with pytest.raises(vol.Invalid):
+            schema({CONF_HOST: "relay.local", CONF_PORT: invalid_port})
 
 
 async def test_options_form_uses_data_fallback(hass) -> None:
@@ -83,6 +134,27 @@ async def test_options_accepts_empty_interlock_pairs(hass) -> None:
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_INTERLOCK_PAIRS] == ""
+
+
+async def test_options_rejects_overlapping_interlock_pairs(hass) -> None:
+    """One output cannot participate in more than one interlock pair."""
+    entry = _entry()
+    entry.add_to_hass(hass)
+
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        flow["flow_id"],
+        {
+            CONF_HOST: "192.0.2.10",
+            CONF_PORT: 4998,
+            CONF_SCAN_INTERVAL: 5,
+            CONF_INTERLOCK_PAIRS: "0-1\n0-2",
+            CONF_INTERLOCK_DELAY_MS: DEFAULT_INTERLOCK_DELAY_MS,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_INTERLOCK_PAIRS: "invalid_interlock_pairs"}
 
 
 async def test_options_save_host_port_and_reload(hass) -> None:
