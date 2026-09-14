@@ -185,6 +185,8 @@ Example:
 
 When turning on one output in a configured pair, the integration first turns off the other output, waits `interlock_delay_ms`, then turns on the requested output.
 
+Each output can belong to only one pair; overlapping definitions such as `0-1` and `0-2` are rejected. Operations in the same pair are serialized, so concurrent Home Assistant requests are processed one transaction at a time. The integration confirms the peer is reported off before it turns on the requested output.
+
 If a module update reports both outputs in a pair as on, the integration logs a warning, records a diagnostic error, and attempts to turn both outputs off.
 
 ### Safety Notice

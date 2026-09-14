@@ -251,8 +251,12 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._pulse_locks: dict[int, asyncio.Lock] = {}
         self._interlock_pairs = interlock_pairs or []
+        self._interlock_locks = {
+            pair: asyncio.Lock() for pair in self._interlock_pairs
+        }
         self._interlock_delay_ms = interlock_delay_ms
         self._interlock_fallback_active: set[tuple[int, int]] = set()
+        self._stopping = False
         self.connection_status = "disconnected"
         self.last_update: datetime | None = None
         self.last_error: str | None = None
@@ -303,6 +307,7 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
 
     async def async_stop_listener(self) -> None:
         """Stop the listener, commands, and coordinator-owned tasks."""
+        self._stopping = True
         _LOGGER.info(
             "Closing Controlart connection to %s:%s for %s",
             self.client.host,
@@ -482,10 +487,29 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
         return data
 
     async def async_set_output(self, channel: int, value: bool) -> None:
-        """Set one output and publish returned states optimistically."""
+        """Set one output, serializing operations for its interlock pair."""
+        if self._stopping:
+            raise HomeAssistantError("Controlart coordinator is stopping")
+
+        interlock_lock = self._interlock_lock_for_channel(channel)
+        if interlock_lock is None:
+            await self._async_set_output(channel, value)
+            return
+
+        async with interlock_lock:
+            if self._stopping:
+                raise HomeAssistantError("Controlart coordinator is stopping")
+            await self._async_set_output(channel, value)
+
+    async def _async_set_output(self, channel: int, value: bool) -> None:
+        """Set one output while any required interlock lock is already held."""
         try:
+            if self._stopping:
+                raise ControlartRelayError("Controlart coordinator is stopping")
             if value:
                 await self._apply_interlock_before_turn_on(channel)
+            if self._stopping:
+                raise ControlartRelayError("Controlart coordinator is stopping")
             states = await self.client.async_set_output(channel, value)
         except ControlartRelayError as err:
             self._set_last_error(str(err))
@@ -511,7 +535,7 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
                 await self.async_request_refresh()
 
     async def _apply_interlock_before_turn_on(self, channel: int) -> None:
-        """Turn off paired output before turning this channel on."""
+        """Turn off and confirm the paired output before turning this one on."""
         paired_channel = self._paired_channel(channel)
         if paired_channel is None:
             return
@@ -532,7 +556,27 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
         states = await self.client.async_set_output(paired_channel, False)
         self._record_valid_update()
         self.async_set_updated_data(states)
+        if self._output_is_on(states, paired_channel):
+            _LOGGER.warning(
+                "Controlart interlock did not turn off OUT%s before OUT%s",
+                paired_channel,
+                channel,
+            )
+            raise ControlartRelayError(
+                f"Interlock peer OUT{paired_channel} remained on"
+            )
         await asyncio.sleep(self._interlock_delay_ms / 1000)
+        if self._stopping:
+            raise ControlartRelayError("Controlart coordinator is stopping")
+        if self._output_is_on(self.data, paired_channel):
+            _LOGGER.warning(
+                "Controlart interlock peer OUT%s is on before turning on OUT%s",
+                paired_channel,
+                channel,
+            )
+            raise ControlartRelayError(
+                f"Interlock peer OUT{paired_channel} is on"
+            )
 
     def _paired_channel(self, channel: int) -> int | None:
         """Return configured interlock peer for channel, if any."""
@@ -542,6 +586,24 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
             if second == channel:
                 return first
         return None
+
+    def _interlock_lock_for_channel(self, channel: int) -> asyncio.Lock | None:
+        """Return the transaction lock for a channel's configured pair."""
+        paired_channel = self._paired_channel(channel)
+        if paired_channel is None:
+            return None
+        return self._interlock_locks[tuple(sorted((channel, paired_channel)))]
+
+    @staticmethod
+    def _output_is_on(
+        data: ControlartRelayData | None, channel: int
+    ) -> bool:
+        """Return whether one output is reported on in a state payload."""
+        return bool(
+            data
+            and len(data["outputs"]) > channel
+            and data["outputs"][channel]
+        )
 
     def _check_interlock_conflicts(self, data: ControlartRelayData) -> None:
         """Detect and correct any configured pair that is simultaneously on."""
@@ -576,9 +638,19 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
 
     async def _async_disable_interlock_pair(self, first: int, second: int) -> None:
         """Safely turn off both outputs in a conflicted pair."""
+        pair = tuple(sorted((first, second)))
         try:
-            await self.client.async_set_output(first, False)
-            states = await self.client.async_set_output(second, False)
+            async with self._interlock_locks[pair]:
+                if not (
+                    self._output_is_on(self.data, first)
+                    and self._output_is_on(self.data, second)
+                ):
+                    return
+
+                first_states = await self.client.async_set_output(first, False)
+                self._record_valid_update()
+                self.async_set_updated_data(first_states)
+                states = await self.client.async_set_output(second, False)
         except ControlartRelayError as err:
             self._set_last_error(str(err))
             _LOGGER.warning(
@@ -587,11 +659,11 @@ class ControlartRelayCoordinator(DataUpdateCoordinator[ControlartRelayData]):
                 second,
                 err,
             )
-            return
-
-        self.last_update = datetime.now(UTC)
-        self.async_set_updated_data(states)
-        self._interlock_fallback_active.discard(tuple(sorted((first, second))))
+        else:
+            self.last_update = datetime.now(UTC)
+            self.async_set_updated_data(states)
+        finally:
+            self._interlock_fallback_active.discard(pair)
 
     @property
     def outputs(self) -> Mapping[int, bool]:

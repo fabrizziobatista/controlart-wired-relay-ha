@@ -1,0 +1,5 @@
+# Home Assistant custom-component test stack.
+pytest==8.4.2
+pytest-homeassistant-custom-component==0.13.297
+# aiodns 3.5.x used by the pinned Home Assistant stack is incompatible with pycares 5.
+pycares==4.11.0
